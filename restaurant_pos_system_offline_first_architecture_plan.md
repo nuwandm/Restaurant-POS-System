@@ -73,6 +73,9 @@ Build a **restaurant POS system** that is:
 | **Sync Engine** | Custom queue + timestamps | Conflict resolution for offline edits |
 | **Print** | node-escpos + USB/Network | ESC/POS thermal printer protocol |
 | **Build** | Vite + electron-builder | Fast builds, auto-update support |
+| **Online Ordering PWA** | React + Vite (deployed web) | Customer-facing ordering portal, no app install |
+| **Payment Gateway** | PayHere / Stripe (configurable) | Card, QR, and COD support for online orders |
+| **Realtime Push** | WebSocket (Socket.io) | Instant online order delivery to POS + customer tracking |
 | **Mobile App** | React Native + Expo | Code share with web components |
 | **CI/CD** | GitHub Actions | Automated builds + releases |
 | **Hosting** | Render / Railway + MongoDB Atlas | Atlas free tier → paid as you scale |
@@ -122,6 +125,7 @@ bills, payments, payment_splits, discounts, refunds
 ingredients, recipes, stock_levels, stock_movements, suppliers, purchase_orders
 customers, loyalty_accounts, loyalty_transactions, gift_cards
 staff_shifts, attendance_logs
+online_orders, online_order_items, delivery_zones, delivery_drivers, delivery_assignments
 sync_queue, sync_log, device_registry
 ```
 
@@ -129,8 +133,22 @@ sync_queue, sync_log, device_registry
 Document model — embed related data to reduce joins, use refs for large/shared entities:
 
 ```js
-// restaurants collection
-{ _id, name, branches: [...], settings: { tax, currency, timezone }, plan }
+// restaurants collection (one per owner/organization)
+{
+  _id, ownerId, name, plan,
+  settings: { currency, timezone, defaultTaxRate },
+  createdAt
+}
+
+// branches collection (one per physical location)
+{
+  _id, restaurantId, name, address, phone,
+  timezone, taxRate, operatingHours: { mon: { open, close }, ... },
+  status: 'active|closed|inactive',
+  receiptHeader, receiptFooter,
+  isOnlineOrderingEnabled, onlineOrderingUrl,
+  createdAt
+}
 
 // menuItems collection
 {
@@ -457,13 +475,192 @@ Document model — embed related data to reduce joins, use refs for large/shared
 
 ## MODULE 13: MULTI-BRANCH MANAGEMENT (Phase 6)
 
-- [ ] Central menu management — push menu changes to all branches
-- [ ] Branch performance comparison dashboard
-- [ ] Consolidated P&L across all branches
-- [ ] Cross-branch inventory transfer
-- [ ] Central customer database — customer recognized at any branch
-- [ ] Branch manager vs owner permission levels
-- [ ] Franchise mode — white-label branding per branch
+> **Designed for:** A single owner running 2–10+ restaurant locations. One login. Full visibility. Each branch operates independently offline — owner oversees everything from the cloud.
+
+---
+
+### 13.1 Owner Account & Branch Access
+
+- [ ] **Single owner account** — one login, access to all branches under one organization
+- [ ] **Branch switcher** — owner switches active branch view from dashboard or POS without re-login
+- [ ] **"All Branches" consolidated view** — aggregated dashboard showing all locations simultaneously
+- [ ] **Per-branch POS login** — staff at each branch log in with their own PIN, only see their branch data
+- [ ] **Branch access control** — staff are locked to their assigned branch(es); owner is unrestricted
+- [ ] **Branch manager role** — manages their own branch only; cannot see other branches
+- [ ] **Add new branch** — owner provisions a new branch from cloud dashboard (name, address, timezone, tax rate)
+
+---
+
+### 13.2 Menu Management Across Branches
+
+- [ ] **Shared master menu** — owner maintains a central menu; all branches inherit it
+- [ ] **Push menu update to all branches** — price change or new item deployed everywhere in one action
+- [ ] **Push to selected branches** — update only specific locations (e.g. new item only at city branch)
+- [ ] **Branch-specific price override** — individual branch can charge a different price for any item
+- [ ] **Branch-exclusive items** — items that only appear at one branch (seasonal, location-specific)
+- [ ] **Item availability per branch** — mark items unavailable at a branch without deleting them
+- [ ] **Category visibility per branch** — hide entire categories at a specific branch
+
+---
+
+### 13.3 Consolidated Reporting & Analytics
+
+- [ ] **Consolidated daily sales** — total revenue across all branches with per-branch breakdown
+- [ ] **Branch comparison dashboard** — side-by-side revenue, order count, avg order value
+- [ ] **Top-performing branch ranking** — daily / weekly / monthly
+- [ ] **Consolidated P&L** — combined income vs cost of goods across all branches
+- [ ] **Branch-wise item performance** — which items sell better at which location
+- [ ] **Unified tax report** — VAT collected per branch and combined total (for filing)
+- [ ] **Custom date range + branch filter** — slice any report by branch and period
+- [ ] **Export consolidated report** — PDF/Excel covering all branches
+
+---
+
+### 13.4 Inventory & Supplier Management
+
+- [ ] **Per-branch stock levels** — each branch tracks inventory independently (offline-safe)
+- [ ] **Cross-branch stock transfer** — request and approve stock movement between branches
+- [ ] **Transfer log** — full audit trail of all inter-branch stock movements
+- [ ] **Centralized supplier directory** — shared supplier list, no duplication across branches
+- [ ] **Branch-specific purchase orders** — each branch orders independently from shared supplier list
+- [ ] **Consolidated purchase overview** — owner sees all open POs across all branches
+
+---
+
+### 13.5 Customer & Loyalty (Cross-Branch)
+
+- [ ] **Unified customer database** — customer recognized at any branch by phone number
+- [ ] **Cross-branch loyalty points** — points earned at branch A redeemable at branch B
+- [ ] **Customer visit history across branches** — owner sees which branches a customer visits
+- [ ] **Centralized gift cards** — sold at one branch, redeemable at all branches
+- [ ] **Cross-branch marketing** — send promotions to all customers regardless of visited branch
+
+---
+
+### 13.6 Branch Settings & Configuration
+
+- [ ] **Branch-specific tax rates** — different regions may have different VAT rules
+- [ ] **Branch-specific operating hours** — each branch sets its own open/close schedule
+- [ ] **Branch-specific receipt header/footer** — each branch prints its own address and contact
+- [ ] **Branch-specific delivery zones** — online ordering configured independently per branch
+- [ ] **Branch status control** — owner marks branch as Active / Temporarily Closed / Inactive
+
+---
+
+### 13.7 Multi-Branch Online Ordering
+
+- [ ] **Per-branch ordering page** — each branch has its own online ordering URL
+- [ ] **Branch selector on main ordering page** — customer picks nearest branch, sees that branch's menu
+- [ ] **Branch-specific delivery zones and fees** — each branch serves its own radius
+- [ ] **Centralized online order view** — owner sees all online orders across all branches in one place
+- [ ] **Branch-specific promo codes** — run location-specific promotions
+
+---
+
+### 13.8 Franchise Mode (Optional)
+
+- [ ] **White-label per branch** — each franchisee gets their own branded receipts and ordering page
+- [ ] **Royalty tracking** — % of branch revenue tracked for franchise fee calculation
+- [ ] **Franchisee owner role** — franchisee sees only their branch; master franchisor sees all
+- [ ] **Template menu** — franchisor pushes standard menu; franchisee adds local items with approval
+
+---
+
+## MODULE 14: CUSTOMER ONLINE ORDERING & DELIVERY (Phase 4–5)
+
+> Customers place delivery orders from their phone or browser — orders flow directly into the POS KDS with no manual entry.
+
+### Must-Have (Phase 4 — Cloud Required)
+
+- [ ] **Public ordering web app (PWA)** — branded page for the restaurant, accessible via URL or QR code
+- [ ] Browse menu with photos, descriptions, allergen tags, and availability status
+- [ ] Add to cart — quantity, item notes, modifier/variant selection
+- [ ] Customer registration / guest checkout (name, phone, delivery address)
+- [ ] Select delivery or pickup at checkout
+- [ ] Online payment gateway — card / QR / cash-on-delivery option
+- [ ] Order confirmation screen + SMS/WhatsApp notification to customer
+- [ ] Order injected directly into POS as a new order (type: `online-delivery`)
+- [ ] KDS shows online orders with a distinct badge — staff can't miss them
+- [ ] Order status updates pushed to customer in real-time: `Received → Preparing → Out for Delivery → Delivered`
+- [ ] Customer order tracking page — shareable link
+
+### Value-Added (Phase 5)
+
+- [ ] **Delivery zone management** — set serviceable areas by radius or pin zones on map
+- [ ] **Delivery fee calculator** — flat fee, or by zone/distance
+- [ ] **Estimated delivery time** — configurable per zone, shown at checkout
+- [ ] **Driver assignment** — assign an in-house delivery driver to an order
+- [ ] **Driver app (PWA)** — driver sees assigned orders, marks as picked up / delivered
+- [ ] **Live driver tracking** — customer sees driver on map (Google Maps embed)
+- [ ] **Minimum order amount** — configurable per branch
+- [ ] **Scheduled orders** — customer selects a future delivery time slot
+- [ ] **Promo codes & online-only discounts** — attract first-time online customers
+- [ ] **Repeat order** — customer reorders from their order history with one tap
+- [ ] **Customer account portal** — view order history, saved addresses, loyalty points
+- [ ] **3rd-party platform integration** — accept orders from PickMe Food / Uber Eats via API and inject into POS
+
+### Online Order Flow (System)
+
+```
+Customer (PWA)                     POS System (Cloud)
+───────────────────────            ─────────────────────────────────
+1. Browse menu
+2. Add to cart
+3. Enter address + payment          4. Payment gateway processes
+                                    5. Order saved to cloud DB
+                                    6. WebSocket push → Electron POS
+                                    7. New online order appears in KDS
+                                    8. Staff accepts / starts preparing
+                                    9. Status update → WebSocket → Customer PWA
+10. Customer sees "Preparing..."
+                                    11. Driver assigned → status = Out for Delivery
+12. Customer sees driver on map
+                                    13. Driver marks Delivered
+14. Customer sees "Delivered" ✅
+                                    15. Auto-closes order → triggers loyalty points
+```
+
+### Online Order Data (SQLite — local cache for offline resilience)
+
+```sql
+online_orders           -- id, branch_id, customer_id, order_type, status, payment_status,
+                        -- subtotal, delivery_fee, discount, total, delivery_address,
+                        -- estimated_delivery_at, driver_id, sync_id, created_at
+online_order_items      -- id, online_order_id, menu_item_id, qty, unit_price, modifiers, notes
+delivery_zones          -- id, branch_id, name, fee, min_order, est_minutes, polygon_coords
+delivery_drivers        -- id, branch_id, staff_id, name, phone, status (available/busy/offline)
+delivery_assignments    -- id, online_order_id, driver_id, assigned_at, picked_up_at, delivered_at
+```
+
+### Online Order Data (MongoDB — Cloud)
+
+```js
+// onlineOrders collection
+{
+  _id, branchId, customerId, orderType: 'online-delivery' | 'online-pickup',
+  status: 'pending|confirmed|preparing|out-for-delivery|delivered|cancelled',
+  paymentStatus: 'pending|paid|refunded',
+  items: [{ menuItemId, name, qty, price, modifiers, notes }],
+  deliveryAddress: { line1, city, lat, lng },
+  deliveryFee, promoCode, discount, subtotal, total,
+  driverId, estimatedDeliveryAt,
+  statusHistory: [{ status, changedBy, changedAt }],
+  customerNote, createdAt, updatedAt, syncId
+}
+
+// deliveryZones collection
+{
+  _id, branchId, name, feeAmount, minOrderAmount,
+  estimatedMinutes, polygon: [{ lat, lng }], isActive
+}
+
+// deliveryDrivers collection
+{
+  _id, branchId, staffId, name, phone,
+  status: 'available|busy|offline',
+  currentOrderId, lastLocationAt
+}
+```
 
 ---
 
@@ -590,7 +787,10 @@ Expiry: use 2099-12-31 for lifetime licenses
 | Inventory, Customers, Reports | ❌ | ✅ | ✅ | ✅ |
 | Loyalty, Supplier Management | ❌ | ✅ | ✅ | ✅ |
 | Cloud Sync, Owner Dashboard, QR Menu | ❌ | ❌ | ✅ | ✅ |
+| **Online Ordering PWA, Delivery Management** | ❌ | ❌ | ✅ | ✅ |
+| **Driver App, Live Tracking, Promo Codes** | ❌ | ❌ | ✅ | ✅ |
 | Multi-Branch, API Access, White-Label | ❌ | ❌ | ❌ | ✅ |
+| **3rd-Party Delivery Platform Integration** | ❌ | ❌ | ❌ | ✅ |
 
 ## 6.7 Security Rules
 
@@ -947,6 +1147,13 @@ Every MongoDB document receives these on sync ingest:
 - [ ] Cloud backup system
 - [ ] Automated daily report (email/WhatsApp)
 - [ ] Push notifications for alerts
+- [ ] **Customer online ordering PWA** — branded web app per restaurant
+- [ ] **Online order API** — receive, validate, push to POS via WebSocket
+- [ ] **Payment gateway integration** — card / QR / COD at checkout
+- [ ] **Online order KDS badge** — distinguish online orders from walk-in orders
+- [ ] **Customer order tracking page** — real-time status via WebSocket
+- [ ] **Delivery zone management** — admin sets zones, fees, ETAs
+- [ ] **SMS/WhatsApp order confirmation** to customer on order received
 
 ---
 
@@ -958,6 +1165,12 @@ Every MongoDB document receives these on sync ingest:
 - [ ] Multi-device support (2nd POS terminal, waiter tablet)
 - [ ] Sync status indicator in UI
 - [ ] Data migration tool (upgrade offline to cloud)
+- [ ] **Delivery driver PWA** — driver app: view assigned orders, update pickup/delivery status
+- [ ] **Driver live location** — driver shares GPS, customer sees on map
+- [ ] **Scheduled/future delivery orders** — customer books a delivery time slot
+- [ ] **Promo codes & online-only discounts engine**
+- [ ] **Customer order history portal** — account login, past orders, saved addresses
+- [ ] **3rd-party delivery platform API** — PickMe Food / Uber Eats order ingestion
 
 ---
 
@@ -965,13 +1178,24 @@ Every MongoDB document receives these on sync ingest:
 
 ### Add:
 - [ ] React Native owner mobile app
-- [ ] Multi-branch management
-- [ ] Franchise dashboard
+- [ ] **Multi-branch management (Module 13 — full build)**
+  - [ ] Single owner account → all branches under one login
+  - [ ] Branch provisioning wizard (add new location from dashboard)
+  - [ ] Central menu with per-branch price/availability overrides
+  - [ ] Push menu changes to all or selected branches
+  - [ ] Consolidated sales dashboard across all branches
+  - [ ] Branch comparison report (revenue, orders, top items)
+  - [ ] Cross-branch stock transfer with approval flow
+  - [ ] Unified customer + loyalty database across branches
+  - [ ] Branch manager role — scoped access per location
+  - [ ] Per-branch settings (tax rate, hours, receipt, delivery zones)
+  - [ ] Multi-branch online ordering with branch selector
+- [ ] Franchise dashboard + royalty tracking
 - [ ] Online ordering integration (PickMe Food, etc.)
 - [ ] AI demand forecasting module
 - [ ] WhatsApp marketing integration
-- [ ] Gift card system
-- [ ] White-label / custom branding
+- [ ] Gift card system (cross-branch redemption)
+- [ ] White-label / custom branding per branch
 
 ---
 
