@@ -1066,6 +1066,375 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
+## 8.3 Design System — Color Palette
+
+> **Theme name: "Slate & Ember"**
+> Built for high-readability in both bright restaurant floors and dim dining areas.
+> Default: Light mode. Optional: Dark mode toggle per device.
+
+### Base Palette
+
+| Token | Light Mode | Dark Mode | Purpose |
+|---|---|---|---|
+| `bg-base` | `#F1F5F9` | `#0F172A` | App background |
+| `bg-surface` | `#FFFFFF` | `#1E293B` | Cards, panels, modals |
+| `bg-surface-2` | `#F8FAFC` | `#334155` | Nested inputs, table rows |
+| `border` | `#E2E8F0` | `#475569` | Dividers, input outlines |
+| `text-primary` | `#0F172A` | `#F8FAFC` | Main content text |
+| `text-muted` | `#64748B` | `#94A3B8` | Labels, placeholders, hints |
+| `text-disabled` | `#CBD5E1` | `#475569` | Inactive elements |
+
+### Brand Colors
+
+| Token | Value | Usage |
+|---|---|---|
+| `brand-primary` | `#EA580C` | Primary buttons, active nav, highlights |
+| `brand-hover` | `#C2410C` | Hover state for primary brand |
+| `brand-light` | `#FFF7ED` | Tinted backgrounds (badges, chips) |
+| `brand-dark` | `#9A3412` | Dark variant for dark mode contrast |
+
+> **Why Ember Orange `#EA580C`?**
+> Warm, appetite-stimulating, instantly recognizable as "action" in a POS context.
+> High contrast on both white and dark backgrounds. Distinct from status colors.
+
+### Semantic / Status Colors
+
+| Status | Token | Hex | Text on White | Usage |
+|---|---|---|---|---|
+| Success | `color-success` | `#16A34A` | White | Order saved, payment received, sync done |
+| Warning | `color-warning` | `#D97706` | White | Low stock, printer slow, partial payment |
+| Danger | `color-danger` | `#DC2626` | White | Void, cancel, delete, refund, error |
+| Info | `color-info` | `#2563EB` | White | Sync status, tips, informational banners |
+| Neutral | `color-neutral` | `#64748B` | White | Disabled states, secondary labels |
+
+### Table Status Colors (Floor Plan)
+
+| Status | Hex | Label |
+|---|---|---|
+| Available | `#22C55E` | Green — ready to seat |
+| Occupied | `#EF4444` | Red — order in progress |
+| Reserved | `#EAB308` | Yellow — booking held |
+| Cleaning | `#3B82F6` | Blue — being cleaned |
+| Bill Requested | `#F97316` | Orange — guest asked for bill |
+
+### KDS Ticket Urgency Colors
+
+| Time Elapsed | Hex | Signal |
+|---|---|---|
+| 0–5 min | `#22C55E` | Green — on time |
+| 5–10 min | `#EAB308` | Yellow — getting slow |
+| 10+ min | `#EF4444` | Red — overdue, alert chef |
+
+### Tailwind CSS Config Extension
+
+```js
+// tailwind.config.js
+colors: {
+  brand:   { DEFAULT: '#EA580C', hover: '#C2410C', light: '#FFF7ED', dark: '#9A3412' },
+  success: { DEFAULT: '#16A34A', light: '#DCFCE7' },
+  warning: { DEFAULT: '#D97706', light: '#FEF9C3' },
+  danger:  { DEFAULT: '#DC2626', light: '#FEE2E2' },
+  info:    { DEFAULT: '#2563EB', light: '#DBEAFE' },
+  surface: { DEFAULT: '#FFFFFF', 2: '#F8FAFC', base: '#F1F5F9' },
+  slate:   { ...defaultTheme.colors.slate },
+}
+```
+
+---
+
+## 8.4 UI Component Framework Stack
+
+| Library | Version | Purpose |
+|---|---|---|
+| **shadcn/ui** | Latest | Core component system — Button, Dialog, Sheet, Select, Table, Badge |
+| **Tailwind CSS** | v3 | Utility-first styling — no runtime, fast builds |
+| **Radix UI** | (via shadcn) | Accessible primitives — dropdowns, modals, tooltips |
+| **Lucide React** | Latest | Icon system — 1,000+ consistent SVG icons |
+| **Recharts** | v2 | Charts for reports — line, bar, pie, heatmap |
+| **Sonner** | Latest | Toast notification system — lightweight, animated |
+| **Framer Motion** | v11 | Micro-animations — table status transitions, cart updates |
+| **React Hook Form** | v7 | Form state management — menu editor, customer forms |
+| **Zod** | v3 | Schema validation — form inputs, API responses |
+| **cmdk** | Latest | Command palette — fast item search in POS screen |
+| **date-fns** | v3 | Date formatting for reports, shifts, timestamps |
+| **react-dnd** | v16 | Drag-and-drop floor plan editor (table layout) |
+
+> **Why Sonner over React Hot Toast?**
+> Sonner supports stacking, promise-based toasts, and rich content.
+> Handles "Order #45 sent to kitchen" style toasts with sub-text natively.
+
+---
+
+## 8.5 Alert & Notification System
+
+> **Rule:** Every message must be readable in under 2 seconds by a busy staff member.
+> Never show raw error codes, SQL errors, or stack traces to end users.
+
+### Toast Notifications (Non-blocking — auto-dismiss 4s)
+
+Used for: confirmations, background events, sync status, non-critical warnings.
+
+```
+PATTERN:  [Icon]  [Short title]
+                  [Optional sub-text]
+```
+
+#### Success Toasts
+
+| Trigger | Title | Sub-text |
+|---|---|---|
+| Order sent to KDS | **Order sent to kitchen** | Table 5 · 3 items |
+| Bill generated | **Bill ready** | LKR 1,134 · Table 5 |
+| Payment received | **Payment confirmed** | LKR 1,200 cash · Change: LKR 66 |
+| Item added to menu | **Item added** | "Kottu Roti" saved to Rice & Mains |
+| Backup completed | **Backup saved** | pos-backup-2026-04-08.posbackup |
+| Sync completed | **All data synced** | 14 orders uploaded to cloud |
+| Customer saved | **Customer saved** | Nimal Perera · 0771 234 567 |
+| Stock updated | **Stock updated** | Chicken: 5 kg added |
+
+#### Warning Toasts
+
+| Trigger | Title | Sub-text |
+|---|---|---|
+| Low stock detected | **Low stock alert** | Chicken below 2 kg — reorder now |
+| Printer slow | **Printer taking longer** | Check paper and connection |
+| Internet lost | **Working offline** | All data is saved. Sync when reconnected |
+| Expiry approaching | **Item expiring soon** | Coconut Milk · expires in 2 days |
+| Order held for long | **Held order waiting** | Table 3 · held 18 minutes ago |
+
+#### Error Toasts
+
+| Trigger | Title | Sub-text |
+|---|---|---|
+| Print failed | **Receipt not printed** | Tap to retry or use backup printer |
+| Sync failed | **Sync paused** | Will retry automatically when online |
+| Payment gateway timeout | **Payment not confirmed** | Check with customer and try again |
+| Duplicate item name | **Name already used** | Choose a different item name |
+| Invalid discount | **Discount not applied** | Discount exceeds item total |
+
+---
+
+### Confirmation Dialogs (Blocking — requires action)
+
+Used for: destructive actions, irreversible operations, financial changes.
+
+```
+PATTERN:
+┌─────────────────────────────────────┐
+│  [Icon]  Dialog Title               │
+│          Sub-text explaining impact │
+│                                     │
+│          [ Cancel ]  [ Confirm ]    │
+└─────────────────────────────────────┘
+```
+
+| Action | Title | Body | Confirm Button |
+|---|---|---|---|
+| Void an order | **Void this order?** | This will cancel all items and cannot be undone. A reason is required. | **Void Order** (red) |
+| Delete menu item | **Delete this item?** | "Fish Curry" will be removed from the menu permanently. Past orders will not be affected. | **Delete Item** (red) |
+| Refund payment | **Issue a refund?** | LKR 1,134 will be refunded to the customer. This cannot be reversed. | **Confirm Refund** (red) |
+| Apply large discount | **Manager approval needed** | This discount (35%) requires a manager PIN to proceed. | **Enter PIN** (amber) |
+| End of day close | **Close today's session?** | This will finalize all sales for April 8, 2026. Make sure cash drawer is counted. | **Close Day** (brand) |
+| Restore backup | **Restore from backup?** | This will replace all current data with the backup from April 7. This cannot be undone. | **Restore** (red) |
+| Remove staff | **Remove this staff member?** | Kasun Silva will lose access immediately. Their past records will be kept. | **Remove** (red) |
+| Transfer table | **Move order to Table 8?** | Table 5's current order will be moved to Table 8. | **Move Order** (brand) |
+
+---
+
+### System Status Banners (Persistent — shown until resolved)
+
+Shown as a top or bottom bar — does not block the POS flow.
+
+| Condition | Banner Text | Color | Action |
+|---|---|---|---|
+| Internet offline | **Working offline — changes saved locally and will sync when reconnected** | Info (blue) | — |
+| Printer offline | **Receipt printer not found — orders are still saving** | Warning (amber) | Retry Connection |
+| License expiring soon | **License expires in 7 days — contact your vendor to renew** | Warning (amber) | Dismiss |
+| License expired | **License expired — contact vendor to reactivate** | Danger (red) | — |
+| Sync conflict | **1 record could not be synced — tap to review** | Warning (amber) | Review |
+| New online order | **New online delivery order received — Table: Online #47** | Brand (orange) | View Order |
+| KDS screen offline | **Kitchen display disconnected — staff must check orders manually** | Danger (red) | Retry |
+
+---
+
+### Input Validation Messages (Inline — below form fields)
+
+| Situation | Message |
+|---|---|
+| Required field empty | This field is required |
+| Phone number invalid | Enter a valid phone number (e.g. 0771 234 567) |
+| Price entered as zero | Price must be greater than LKR 0 |
+| Negative stock entered | Stock quantity cannot be negative |
+| Name too long | Keep the name under 60 characters |
+| PIN too short | PIN must be exactly 4 digits |
+| Duplicate email | This email is already linked to another customer |
+| Date in the past | Please select today or a future date |
+
+---
+
+## 8.6 Typography System
+
+### Font Stack (3 fonts — each with a specific job)
+
+---
+
+#### 1. Plus Jakarta Sans — Primary UI Font
+
+```
+npm install @fontsource-variable/plus-jakarta-sans
+```
+
+| Property | Value |
+|---|---|
+| Type | Geometric Humanist Sans-Serif |
+| Format | Variable font (100–800 weight range) |
+| Source | Google Fonts — free, open source |
+| License | SIL Open Font License 1.1 |
+
+**Why Plus Jakarta Sans:**
+- Designed for screen interfaces — every character is sharp at 14–32px on a touchscreen
+- Geometric structure gives it a modern, premium SaaS feel
+- Humanist details keep it warm and readable — not cold like pure geometric fonts
+- Characters like `0`, `O`, `D`, `I`, `l`, `1` are distinctly shaped — no confusion for staff reading fast
+- Variable font means one file covers all weights with smooth transitions (no layout shift)
+- Widely used in modern South/Southeast Asian product design — feels locally familiar
+- Renders beautifully on the 15.6" FHD touchscreen displays common in Sri Lanka
+
+```css
+/* CSS usage */
+font-family: 'Plus Jakarta Sans Variable', sans-serif;
+
+/* Tailwind fontFamily extension */
+fontFamily: {
+  sans: ['Plus Jakarta Sans Variable', 'sans-serif'],
+}
+```
+
+---
+
+#### 2. JetBrains Mono — Numbers, Amounts, Codes
+
+```
+npm install @fontsource/jetbrains-mono
+```
+
+| Property | Value |
+|---|---|
+| Type | Monospace |
+| Format | Static (400, 500, 700) |
+| Source | JetBrains — free, open source |
+| License | SIL Open Font License 1.1 |
+
+**Why JetBrains Mono:**
+- Every digit (`0–9`) has identical width — totals, prices, and quantities in tables align perfectly in columns without CSS hacks
+- Distinguishes `0` vs `O`, `1` vs `l` vs `I` — critical when reading order IDs and amounts fast
+- The `LKR 1,134.00` on a bill or the `#0047` order number is instantly scannable
+- Used everywhere amounts appear: order totals, change calculator, reports, inventory quantities, bill line items
+
+```css
+/* CSS usage */
+font-family: 'JetBrains Mono', monospace;
+
+/* Tailwind fontFamily extension */
+fontFamily: {
+  mono: ['JetBrains Mono', 'monospace'],
+}
+```
+
+**Where it's applied specifically:**
+- All LKR amounts in cart, bill, payment screens
+- Order numbers (`#0047`)
+- Stock quantities and ingredient amounts
+- Report table columns
+- License key and Device ID display
+- Promo code input fields
+
+---
+
+#### 3. Noto Sans (Sinhala + Tamil) — Local Language Scripts
+
+```
+npm install @fontsource/noto-sans-sinhala
+npm install @fontsource/noto-sans-tamil
+```
+
+| Property | Value |
+|---|---|
+| Type | Humanist Sans-Serif (multi-script) |
+| Source | Google / Noto Project — free |
+| License | SIL Open Font License 1.1 |
+
+**Why Noto Sans:**
+- "Noto" = No Tofu — designed to eliminate the □ boxes that appear when a font can't render a character
+- Designed specifically for screen readability at UI sizes
+- Sinhala and Tamil variants share the same visual weight and x-height as Plus Jakarta Sans — they blend seamlessly in mixed-script UI
+- The only production-grade free Sinhala font built for modern web rendering
+
+```css
+/* Applied conditionally when locale = 'si' or 'ta' */
+font-family: 'Noto Sans Sinhala', 'Plus Jakarta Sans Variable', sans-serif;
+font-family: 'Noto Sans Tamil',   'Plus Jakarta Sans Variable', sans-serif;
+```
+
+---
+
+### Complete Font Loading (main.tsx or index.css)
+
+```ts
+// main.tsx — load only what's needed
+import '@fontsource-variable/plus-jakarta-sans'   // UI font (variable)
+import '@fontsource/jetbrains-mono/400.css'        // Amounts, mono
+import '@fontsource/jetbrains-mono/700.css'        // Bold mono (totals)
+import '@fontsource/noto-sans-sinhala/400.css'     // Sinhala body
+import '@fontsource/noto-sans-sinhala/700.css'     // Sinhala bold
+import '@fontsource/noto-sans-tamil/400.css'       // Tamil body
+```
+
+---
+
+### Typography Scale
+
+| Token | Font | Size | Weight | Usage |
+|---|---|---|---|---|
+| `text-display` | JetBrains Mono | 36px / 2.25rem | 700 | Bill total, change amount on payment screen |
+| `text-heading` | Plus Jakarta Sans | 24px / 1.5rem | 700 | Page titles, modal headings |
+| `text-subheading` | Plus Jakarta Sans | 18px / 1.125rem | 600 | Section headers, card titles |
+| `text-body` | Plus Jakarta Sans | 16px / 1rem | 400 | Body text, item descriptions |
+| `text-label` | Plus Jakarta Sans | 14px / 0.875rem | 500 | Form labels, table column headers |
+| `text-small` | Plus Jakarta Sans | 12px / 0.75rem | 400 | Timestamps, hints, sub-text |
+| `text-amount` | JetBrains Mono | 16px / 1rem | 500 | Prices, quantities, stock numbers |
+| `text-amount-lg` | JetBrains Mono | 24px / 1.5rem | 700 | Order total, bill summary totals |
+| `text-code` | JetBrains Mono | 14px / 0.875rem | 400 | Order IDs, license keys, promo codes |
+
+---
+
+### Tailwind Full Config (typography section)
+
+```js
+// tailwind.config.js
+theme: {
+  extend: {
+    fontFamily: {
+      sans:  ['Plus Jakarta Sans Variable', 'Noto Sans Sinhala', 'Noto Sans Tamil', 'sans-serif'],
+      mono:  ['JetBrains Mono', 'monospace'],
+    },
+    fontSize: {
+      'display':     ['2.25rem', { lineHeight: '1.1', fontWeight: '700' }],
+      'heading':     ['1.5rem',  { lineHeight: '1.3', fontWeight: '700' }],
+      'subheading':  ['1.125rem',{ lineHeight: '1.4', fontWeight: '600' }],
+      'body':        ['1rem',    { lineHeight: '1.6', fontWeight: '400' }],
+      'label':       ['0.875rem',{ lineHeight: '1.4', fontWeight: '500' }],
+      'small':       ['0.75rem', { lineHeight: '1.4', fontWeight: '400' }],
+      'amount':      ['1rem',    { lineHeight: '1.5', fontWeight: '500', fontFamily: 'JetBrains Mono' }],
+      'amount-lg':   ['1.5rem',  { lineHeight: '1.2', fontWeight: '700', fontFamily: 'JetBrains Mono' }],
+      'code':        ['0.875rem',{ lineHeight: '1.5', fontWeight: '400', fontFamily: 'JetBrains Mono' }],
+    },
+  }
+}
+```
+
+---
+
 # 🧪 12. DEVELOPMENT PHASE PLAN
 
 ---
