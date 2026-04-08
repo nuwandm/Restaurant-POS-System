@@ -516,7 +516,272 @@ These differentiate this product from every generic POS on the market:
 
 ---
 
-# 🗂️ 6. DATABASE DESIGN PRINCIPLES
+# 🔑 6. LICENSE KEY SYSTEM
+
+> The software is locked until activated. The owner calls the vendor, gets a key, enters it once. Works 100% offline.
+
+## 6.1 How It Works (Flow)
+
+```
+CUSTOMER SIDE                         VENDOR SIDE (You)
+─────────────────                     ──────────────────────────
+1. Install POS on laptop
+2. Open app → "Not Activated" screen
+3. App shows Device ID:
+   e.g.  A3F2-BC91-44DE-77FA          4. Customer calls/WhatsApps you
+                                       5. You run:
+                                          node generate-key.js A3F2-BC91-44DE-77FA business 2027-12-31
+                                       6. Tool outputs Activation Key:
+                                          B84A2-C19FE-7734A-A2891-DD320
+                                       7. You send key to customer
+8. Customer enters key in app
+9. App verifies offline (no internet)
+10. Software unlocks for that tier
+```
+
+## 6.2 Device ID Generation
+
+- Built from: **MAC address + hostname + OS platform** → SHA-256 hash
+- Format: `XXXX-XXXX-XXXX-XXXX` (16 hex chars, grouped)
+- Same machine always produces the same Device ID
+- Changing the network card changes the Device ID → customer calls you for new key
+
+## 6.3 Activation Key Generation (Vendor Tool)
+
+- **Algorithm**: `HMAC-SHA256(deviceId + "|" + licenseType + "|" + expiryDate, VENDOR_SECRET)`
+- Take first 25 chars of result → format as `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`
+- `VENDOR_SECRET` is kept only on your machine — never shipped to customers
+- Verification in the app: re-computes the HMAC and compares → no server needed
+
+## 6.4 Vendor Keygen Tool
+
+A simple Node.js CLI script (kept private by developer):
+
+```
+Usage:
+  node tools/keygen/generate-key.js <deviceId> <licenseType> <expiryDate>
+
+Examples:
+  node generate-key.js A3F2-BC91-44DE-77FA starter 2026-12-31
+  node generate-key.js A3F2-BC91-44DE-77FA business 2027-06-30
+  node generate-key.js A3F2-BC91-44DE-77FA pro 2099-12-31
+
+License Types: starter | business | pro | enterprise
+Expiry: use 2099-12-31 for lifetime licenses
+```
+
+## 6.5 What the License Stores (locally on customer machine)
+
+```json
+{
+  "deviceId": "A3F2-BC91-44DE-77FA",
+  "licenseType": "business",
+  "expiryDate": "2027-12-31",
+  "activationKey": "B84A2-C19FE-7734A-A2891-DD320",
+  "activatedAt": "2026-04-08T10:30:00.000Z"
+}
+```
+
+## 6.6 Feature Gating by License Tier
+
+| Feature | Starter | Business | Pro | Enterprise |
+|---|:---:|:---:|:---:|:---:|
+| POS, Tables, Billing, KDS | ✅ | ✅ | ✅ | ✅ |
+| Inventory, Customers, Reports | ❌ | ✅ | ✅ | ✅ |
+| Loyalty, Supplier Management | ❌ | ✅ | ✅ | ✅ |
+| Cloud Sync, Owner Dashboard, QR Menu | ❌ | ❌ | ✅ | ✅ |
+| Multi-Branch, API Access, White-Label | ❌ | ❌ | ❌ | ✅ |
+
+## 6.7 Security Rules
+
+- License file is re-verified on every app launch (prevents manual file editing)
+- Key is re-derived and compared — if tampered with, app shows "Invalid License"
+- Key is bound to Device ID — copying `license.json` to another machine fails
+- If customer changes their laptop → call vendor → get new key for new Device ID
+
+---
+
+# 🔐 7. PASSWORD SYSTEM
+
+## 7.1 Owner Password Recovery (Vendor-Assisted)
+
+When an owner forgets their password they call you (the vendor). You generate a **one-time reset key** valid only for today.
+
+### Flow
+
+```
+OWNER                                 VENDOR (You)
+─────────────────────                 ──────────────────────
+1. Login screen → "Forgot Password"
+2. App shows Device ID
+3. Owner calls/WhatsApps you          4. You run:
+                                         node generate-password-reset.js A3F2-BC91-44DE-77FA
+                                      5. Tool outputs Reset Key:
+                                         A3F2-BC91-44DE-77FA-9C21
+                                      6. You send key to owner
+7. Owner enters Reset Key
+8. App verifies (offline, date-bound)
+9. "Set New Password" screen appears
+10. Owner sets new password
+11. Reset key is marked used (can't reuse)
+```
+
+### Reset Key Security Design
+
+- **Bound to**: Device ID + today's calendar date (`YYYY-MM-DD`)
+- **Expires**: At midnight of the day it was issued — useless next day
+- **One-time use**: App marks the key used after successful reset
+- **Algorithm**: `HMAC-SHA256("RESET|" + deviceId + "|" + date, VENDOR_SECRET)` → first 20 chars → `XXXX-XXXX-XXXX-XXXX-XXXX`
+- No internet needed — everything verified locally
+
+### Vendor Tool
+
+```
+Usage:
+  node tools/keygen/generate-password-reset.js <deviceId>
+  node tools/keygen/generate-password-reset.js <deviceId> --date 2026-04-08
+
+Example output:
+  KEY: A3F2-BC91-44DE-77FA-9C21
+  Valid for today only. Expires at midnight.
+```
+
+## 7.2 Staff Password Reset (By Owner)
+
+Owner can reset any staff member's password without calling the vendor.
+
+### Flow
+
+```
+Owner → Staff Management → Select Staff → "Reset Password"
+  ↓
+App generates a 6-digit temporary PIN (e.g. 483920)
+  ↓
+Owner tells staff the temporary PIN verbally
+  ↓
+Staff logs in with temp PIN
+  ↓
+"You must set a new password to continue" screen
+  ↓
+Staff sets new password → saved as hash, temp PIN invalidated
+```
+
+### Key Rules
+
+- Owner sees the temp PIN once — on screen — must verbally tell staff
+- Temp PIN is stored as a hash in DB with `mustChangePassword = true` flag
+- Staff cannot use the app until they set a new password after a reset
+- Owner cannot see a staff member's current password (one-way hash)
+- All password changes are logged in the audit trail (who reset whose password, when)
+
+## 7.3 Password Storage (Security)
+
+- Passwords are **never stored in plain text**
+- Storage: `SHA-256(salt + password)` where `salt` is a random 16-byte hex string
+- Both `hash` and `salt` stored in the `staff` table
+- Staff table columns: `password_hash TEXT`, `password_salt TEXT`, `must_change_password INTEGER DEFAULT 0`
+
+---
+
+# 💾 8. BACKUP & DATA RECOVERY SYSTEM
+
+> If the laptop breaks, gets stolen, or crashes — no data is lost.
+
+## 8.1 Backup File Format
+
+A `.posbackup` file is a **ZIP archive** containing:
+
+```
+pos-backup-2026-04-08.posbackup
+  ├── pos.db          → Full SQLite database (all data)
+  └── metadata.json   → Backup info for validation
+```
+
+### metadata.json contents
+
+```json
+{
+  "version": "1.0.0",
+  "backupDate": "2026-04-08T22:00:00.000Z",
+  "restaurantName": "Green Leaf Restaurant",
+  "branchName": "Main Branch",
+  "dbSizeBytes": 2457600,
+  "totalOrders": 14523,
+  "checksum": "sha256-hash-of-pos.db"
+}
+```
+
+## 8.2 Manual Export (Owner-Initiated)
+
+- Settings → Backup → **Export Backup**
+- File save dialog opens → owner chooses location (USB drive, Documents folder, etc.)
+- Saves `pos-backup-RestaurantName-2026-04-08.posbackup` file
+- **Recommended**: Save to a USB drive stored off-site
+
+## 8.3 Manual Import / Restore
+
+- Settings → Backup → **Restore from Backup**
+- File picker opens → owner selects `.posbackup` file
+- App validates:
+  - ✅ ZIP contains `pos.db` + `metadata.json`
+  - ✅ SHA-256 checksum of embedded database matches metadata
+  - ✅ Metadata version is compatible
+- Before overwriting: **auto-saves a pre-restore backup** to `AppData/backups/auto/pre-restore-*.db`
+- Replaces current database
+- App prompts restart
+
+## 8.4 Auto-Backup (Scheduled)
+
+- Runs automatically **on day-close** (when cashier closes the day)
+- Also runs on a **daily timer** (e.g. 11:00 PM every night, configurable)
+- Saved to: `AppData/Restaurant-POS/backups/auto/auto-2026-04-08T23-00-00.posbackup`
+- Keeps the **last 30 auto-backups**, deletes older ones automatically
+
+## 8.5 Backup to External Location (Phase 4 — Cloud)
+
+- When cloud is enabled: auto-backup also uploads to **MongoDB Atlas** or **Google Drive**
+- Owner can access backups from the cloud dashboard
+- Restore can be triggered remotely if the machine is online
+
+## 8.6 Disaster Recovery Steps (If Laptop Breaks)
+
+```
+1. Get a new laptop
+2. Install the POS software
+3. Plug in the USB drive with the backup file
+4. Settings → Restore from Backup → select the .posbackup file
+5. App restores all data (orders, menu, customers, inventory, staff)
+6. Call vendor for a new Activation Key (new Device ID on new machine)
+7. Enter new key → software unlocks → fully operational
+```
+
+## 8.7 Backup UI in Settings Screen
+
+```
+┌─────────────────────────────────────────────────┐
+│  💾 BACKUP & RESTORE                            │
+├─────────────────────────────────────────────────┤
+│  Last auto-backup: Today at 11:00 PM  ✅        │
+│                                                  │
+│  [📤 Export Backup Now]                         │
+│  [📥 Restore from Backup File]                  │
+│                                                  │
+│  Auto-Backup Schedule:  [Daily at] [11:00 PM ▼] │
+│  Keep last: [30 ▼] backups                      │
+│                                                  │
+│  📁 Backup folder: C:\AppData\...\backups\auto  │
+│     [Open Folder]                               │
+│                                                  │
+│  Recent Auto-Backups:                           │
+│  • auto-2026-04-08.posbackup  (2.4 MB)         │
+│  • auto-2026-04-07.posbackup  (2.3 MB)         │
+│  • auto-2026-04-06.posbackup  (2.3 MB)         │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+# 🗂️ 9. DATABASE DESIGN PRINCIPLES
 
 ## 6.1 Key Design Decisions
 
@@ -554,7 +819,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# 🔐 7. SECURITY DESIGN
+# 🔐 10. SECURITY DESIGN
 
 | Area | Implementation |
 |---|---|
@@ -568,7 +833,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# 💻 8. UI/UX DESIGN PRINCIPLES
+# 💻 11. UI/UX DESIGN PRINCIPLES
 
 ## 8.1 POS Screen Rules (Critical)
 - **0-click to most common action** — cashier should never need to scroll for top items
@@ -601,7 +866,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# 🧪 9. DEVELOPMENT PHASE PLAN
+# 🧪 12. DEVELOPMENT PHASE PLAN
 
 ---
 
@@ -710,7 +975,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# 💰 10. MONETIZATION STRATEGY
+# 💰 13. MONETIZATION STRATEGY
 
 ## Pricing Tiers
 
@@ -752,7 +1017,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# ⚠️ 11. RISKS & MITIGATION
+# ⚠️ 14. RISKS & MITIGATION
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
@@ -766,7 +1031,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# 📋 12. QUALITY & TESTING STRATEGY
+# 📋 15. QUALITY & TESTING STRATEGY
 
 ## Testing Levels
 
@@ -787,7 +1052,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# 🚀 13. GO-TO-MARKET STRATEGY
+# 🚀 16. GO-TO-MARKET STRATEGY
 
 ## Phase 1 Launch (Month 1–2)
 1. Install free at 2 pilot restaurants (friends/family)
@@ -810,7 +1075,7 @@ Every MongoDB document receives these on sync ingest:
 
 ---
 
-# ✅ 14. DEFINITION OF DONE — PHASE 1
+# ✅ 17. DEFINITION OF DONE — PHASE 1
 
 A feature is **done** when:
 - [ ] It works completely offline
@@ -822,7 +1087,7 @@ A feature is **done** when:
 
 ---
 
-# 🧭 15. FINAL EXECUTION PLAN
+# 🧭 18. FINAL EXECUTION PLAN
 
 ```
 Week 1–4:   Build Phase 1 MVP (offline POS + billing + print)
